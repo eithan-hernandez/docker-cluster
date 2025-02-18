@@ -1,0 +1,53 @@
+version: '3.8'
+
+networks:
+  spark-net:
+    external: true
+
+volumes:
+  spark-vol:
+    external: true
+
+services:
+  spark-master:
+    image: bitnami/spark:latest
+    networks:
+      - spark-net
+    ports:
+      - "8080:8080"   # Interfaz web del Spark Master
+      - "7077:7077"   # Puerto para comunicación con los workers
+    environment:
+      - SPARK_MODE=master
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager  # Se ejecutará solo en el nodo manager
+
+  spark-worker:
+    image: bitnami/spark:latest
+    networks:
+      - spark-net
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_CORES=4        # Ajusta según tus núcleos disponibles
+      - SPARK_WORKER_MEMORY=6G      # Ajusta según tu RAM disponible
+    deploy:
+      replicas: 3                    # Se desplegarán 3 workers; cada uno se asigna a un nodo worker
+      placement:
+        constraints:
+          - node.role == worker
+
+  jupyter:
+    image: jupyter/pyspark-notebook:latest
+    networks:
+      - spark-net
+    ports:
+      - "8888:8888"   # Acceso a Jupyter Notebook
+    environment:
+      - JUPYTER_TOKEN=sparkdemo
+    volumes:
+      - spark-vol:/data    # Monta el volumen para acceder a los archivos
+    deploy:
+      placement:
+        max_replicas_per_node: 1

@@ -1,0 +1,62 @@
+version: '3.8'
+
+# Definición de la red externa que se creó previamente
+networks:
+  spark-net:
+    external: true
+
+# Definición del volumen externo para almacenar datos
+volumes:
+  spark-vol:
+    external: true
+
+services:
+  # Servicio Spark Master
+  spark-master:
+    image: bitnami/spark:latest
+    networks:
+      - spark-net
+    ports:
+      - "8080:8080"   # Interfaz web del Spark Master
+      - "7077:7077"   # Puerto para que los workers se conecten
+    environment:
+      - SPARK_MODE=master
+    deploy:
+      placement:
+        constraints:
+          - node.role == manager   # Forzamos que el Master se ejecute en el nodo manager (tu ASUS TUF)
+
+  # Servicio Spark Worker
+  spark-worker:
+    image: bitnami/spark:latest
+    networks:
+      - spark-net
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_CORES=1        # Ajustado para un ambiente donde el manager (tu ASUS TUF) tiene 6 núcleos: 2 cores para cada worker es razonable
+      - SPARK_WORKER_MEMORY=1G      # Asigna 4 GB de RAM por worker (puedes ajustar según la carga)
+    deploy:
+      replicas: 1
+      # **Importante para la demo en una sola máquina:**  
+      # En este YAML, NO se impone la restricción de 'node.role == worker', 
+      # de modo que los workers se ejecuten también en el nodo manager.
+      # En el futuro, cuando se añadan más nodos, puedes agregar la restricción:
+      #   placement:
+      #     constraints:
+      #       - node.role == worker
+
+  # Servicio Jupyter Notebook con PySpark
+  jupyter:
+    image: jupyter/pyspark-notebook:latest
+    networks:
+      - spark-net
+    ports:
+      - "8888:8888"   # Acceso al Notebook
+    environment:
+      - JUPYTER_TOKEN=sparkdemo
+    volumes:
+      - spark-vol:/data    # Monta el volumen para acceder a los archivos de datos
+    deploy:
+      placement:
+        max_replicas_per_node: 1
